@@ -116,26 +116,19 @@ jobs:
           DEPLOY_PORT:    ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER:    ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH:    ${{ secrets.DEPLOY_PATH }}
-          DEPLOY_WEBROOT: ${{ secrets.DEPLOY_WEBROOT }}
         run: |
           rsync -az --delete -e "ssh -p $DEPLOY_PORT" \
             public/build/ \
             $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/public/build/
 
-          # If the domain's web root differs from DEPLOY_PATH/public, also
-          # place assets there so the web server can serve them directly.
-          if [ -n "$DEPLOY_WEBROOT" ]; then
-            ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST \
-              "mkdir -p $DEPLOY_WEBROOT && ln -sfn $DEPLOY_PATH/public/build $DEPLOY_WEBROOT/build"
-          fi
-
       - name: Finalize deploy
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          DEPLOY_PHP:  ${{ secrets.DEPLOY_PHP }}
+          DEPLOY_HOST:    ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT:    ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER:    ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH:    ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PHP:     ${{ secrets.DEPLOY_PHP }}
+          DEPLOY_WEBROOT: ${{ secrets.DEPLOY_WEBROOT }}
           RUN_MIGRATIONS: ${{ github.event.inputs.run_migrations || 'true' }}
           RUN_SCOUT_IMPORT: ${{ github.event.inputs.run_scout_import || 'false' }}
         run: |
@@ -143,6 +136,13 @@ jobs:
             set -e
             PHP="${DEPLOY_PHP:-php}"
             cd $DEPLOY_PATH
+
+            # Ensure the web root's build/ points to the app's compiled assets.
+            # The web root (DEPLOY_WEBROOT) differs from DEPLOY_PATH/public on this server.
+            if [ -n "$DEPLOY_WEBROOT" ]; then
+              ln -sfn $DEPLOY_PATH/public/build $DEPLOY_WEBROOT/build
+              echo "==> Symlinked $DEPLOY_WEBROOT/build -> $DEPLOY_PATH/public/build"
+            fi
 
             echo "==> Caching configuration"
             \$PHP artisan config:cache
