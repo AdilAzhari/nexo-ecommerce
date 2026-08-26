@@ -161,10 +161,17 @@ jobs:
             PHP="${DEPLOY_PHP:-php}"
             cd $DEPLOY_PATH
 
-            # Ensure the web root's build/ points to the app's compiled assets.
+            # The staging web root is a standalone directory (not a symlink to
+            # $DEPLOY_PATH/public), so it needs its own bootstrap: compiled
+            # assets, uploaded file storage, and an index.php/.htaccess pair
+            # pointing at the real app. Regenerated every deploy so a
+            # recreated web root self-heals instead of silently 404ing.
             if [ -n "$DEPLOY_WEBROOT" ]; then
               ln -sfn $DEPLOY_PATH/public/build $DEPLOY_WEBROOT/build
-              echo "==> Symlinked $DEPLOY_WEBROOT/build -> $DEPLOY_PATH/public/build"
+              ln -sfn $DEPLOY_PATH/storage/app/public $DEPLOY_WEBROOT/storage
+              cp $DEPLOY_PATH/public/.htaccess $DEPLOY_WEBROOT/.htaccess
+              sed "s#__DIR__\.'/\.\.#'$DEPLOY_PATH#g" $DEPLOY_PATH/public/index.php > $DEPLOY_WEBROOT/index.php
+              echo "==> Regenerated web root bootstrap ($DEPLOY_WEBROOT)"
             fi
 
             echo "==> Caching configuration"
