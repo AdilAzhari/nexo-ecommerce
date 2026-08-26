@@ -258,8 +258,8 @@ const quickActions = [
                         <!-- Area fill -->
                         <defs>
                             <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stop-color="oklch(0.58 0.24 284)" stop-opacity="0.3" />
-                                <stop offset="100%" stop-color="oklch(0.58 0.24 284)" stop-opacity="0.02" />
+                                <stop offset="0%" stop-color="oklch(0.56 0.16 255)" stop-opacity="0.3" />
+                                <stop offset="100%" stop-color="oklch(0.56 0.16 255)" stop-opacity="0.02" />
                             </linearGradient>
                         </defs>
                         <path
@@ -271,7 +271,7 @@ const quickActions = [
                             v-if="chartPath.line"
                             :d="chartPath.line"
                             fill="none"
-                            stroke="oklch(0.58 0.24 284)"
+                            stroke="oklch(0.56 0.16 255)"
                             stroke-width="1.5"
                             stroke-linecap="round"
                             stroke-linejoin="round"
@@ -283,7 +283,7 @@ const quickActions = [
                             :cx="(i / (chart_data.length - 1)) * 200"
                             :cy="80 - Math.max((d.revenue / maxRevenue) * 72, 2)"
                             r="2.5"
-                            fill="oklch(0.58 0.24 284)"
+                            fill="oklch(0.56 0.16 255)"
                             class="opacity-0 hover:opacity-100 transition-opacity"
                         />
                     </svg>

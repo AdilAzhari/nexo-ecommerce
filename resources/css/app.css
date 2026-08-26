@@ -27,31 +27,32 @@
     --color-navy-900: oklch(0.12 0.06 264);
     --color-navy-950: oklch(0.08 0.04 264);
 
-    /* Brand — Electric Indigo (tenant-overridable via --color-brand-* override) */
-    --color-brand-50:  oklch(0.96 0.03 284);
-    --color-brand-100: oklch(0.92 0.07 284);
-    --color-brand-200: oklch(0.84 0.13 284);
-    --color-brand-300: oklch(0.74 0.18 284);
-    --color-brand-400: oklch(0.65 0.22 284);
-    --color-brand-500: oklch(0.58 0.24 284);
-    --color-brand-600: oklch(0.49 0.24 284);
-    --color-brand-700: oklch(0.40 0.22 284);
-    --color-brand-800: oklch(0.32 0.17 284);
-    --color-brand-900: oklch(0.24 0.12 284);
-    --color-brand-950: oklch(0.15 0.08 284);
+    /* Brand — Nile Market navy/blue (tenant-overridable via --color-brand-* override)
+       Anchored to the redesign palette: brand-500 ~ #1976D2, brand-700 ~ #0D47A1 */
+    --color-brand-50:  oklch(0.97 0.02 255);
+    --color-brand-100: oklch(0.93 0.04 255);
+    --color-brand-200: oklch(0.86 0.08 255);
+    --color-brand-300: oklch(0.76 0.12 255);
+    --color-brand-400: oklch(0.65 0.15 255);
+    --color-brand-500: oklch(0.56 0.16 255);
+    --color-brand-600: oklch(0.49 0.16 258);
+    --color-brand-700: oklch(0.42 0.16 260);
+    --color-brand-800: oklch(0.34 0.14 262);
+    --color-brand-900: oklch(0.26 0.11 262);
+    --color-brand-950: oklch(0.17 0.07 262);
 
-    /* Accent — Emerald */
-    --color-accent-50:  oklch(0.97 0.03 155);
-    --color-accent-100: oklch(0.93 0.07 155);
-    --color-accent-200: oklch(0.86 0.12 155);
-    --color-accent-300: oklch(0.77 0.17 155);
-    --color-accent-400: oklch(0.68 0.19 155);
-    --color-accent-500: oklch(0.60 0.20 155);
-    --color-accent-600: oklch(0.51 0.19 155);
-    --color-accent-700: oklch(0.43 0.16 155);
-    --color-accent-800: oklch(0.34 0.12 155);
-    --color-accent-900: oklch(0.26 0.09 155);
-    --color-accent-950: oklch(0.17 0.06 155);
+    /* Accent — Nile Market gold, anchored to accent-500 ~ #F9A825 */
+    --color-accent-50:  oklch(0.98 0.02 85);
+    --color-accent-100: oklch(0.95 0.05 82);
+    --color-accent-200: oklch(0.90 0.09 78);
+    --color-accent-300: oklch(0.85 0.13 75);
+    --color-accent-400: oklch(0.81 0.15 73);
+    --color-accent-500: oklch(0.79 0.16 72);
+    --color-accent-600: oklch(0.70 0.16 65);
+    --color-accent-700: oklch(0.58 0.15 55);
+    --color-accent-800: oklch(0.46 0.13 45);
+    --color-accent-900: oklch(0.35 0.10 40);
+    --color-accent-950: oklch(0.24 0.07 35);
 }
 
 /* ============================================================
@@ -74,8 +75,8 @@
 }
 
 @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 0 0  oklch(0.58 0.24 284 / 0.4); }
-    50%       { box-shadow: 0 0 0 8px oklch(0.58 0.24 284 / 0); }
+    0%, 100% { box-shadow: 0 0 0 0  oklch(0.56 0.16 255 / 0.4); }
+    50%       { box-shadow: 0 0 0 8px oklch(0.56 0.16 255 / 0); }
 }
 
 @keyframes fade-in-up {
@@ -132,7 +133,7 @@
 
 /* --- Gradient text --- */
 .gradient-text {
-    background: linear-gradient(135deg, oklch(0.58 0.24 284), oklch(0.60 0.20 155));
+    background: linear-gradient(135deg, oklch(0.56 0.16 255), oklch(0.79 0.16 72));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -143,7 +144,7 @@
     background: linear-gradient(
         135deg,
         oklch(0.12 0.06 264),
-        oklch(0.16 0.09 284),
+        oklch(0.17 0.07 262),
         oklch(0.12 0.06 264)
     );
     background-size: 200% 200%;
@@ -220,7 +221,7 @@
 /* --- Nav active underline indicator --- */
 .nav-active {
     position: relative;
-    color: oklch(0.58 0.24 284);
+    color: oklch(0.56 0.16 255);
 }
 
 .nav-active::after {
@@ -231,7 +232,7 @@
     right: 0.75rem;
     height: 2px;
     border-radius: 9999px;
-    background: oklch(0.58 0.24 284);
+    background: oklch(0.56 0.16 255);
 }
 
 /* --- Custom scrollbar --- */
@@ -247,6 +248,6 @@
 
 /* --- Focus ring --- */
 :focus-visible {
-    outline: 2px solid oklch(0.58 0.24 284);
+    outline: 2px solid oklch(0.56 0.16 255);
     outline-offset: 2px;
 }

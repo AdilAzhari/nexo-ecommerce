@@ -52,7 +52,7 @@ export function usePayments(stripePublicKey: string) {
             appearance: {
                 theme: 'stripe',
                 variables: {
-                    colorPrimary: '#4F46E5',
+                    colorPrimary: '#1976D2',
                     colorBackground: '#ffffff',
                     colorText: '#1f2937',
                     colorDanger: '#dc2626',
