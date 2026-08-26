@@ -106,7 +106,26 @@ jobs:
             git pull origin main
 
             echo "==> Installing PHP dependencies"
-            COMPOSER=\$(which composer 2>/dev/null || echo "\$HOME/bin/composer")
+            if command -v composer >/dev/null 2>&1; then
+              COMPOSER="composer"
+            elif [ -f "\$HOME/bin/composer" ]; then
+              COMPOSER="\$HOME/bin/composer"
+            elif [ -f "$DEPLOY_PATH/composer.phar" ]; then
+              COMPOSER="$DEPLOY_PATH/composer.phar"
+            else
+              echo "==> composer not found on server, bootstrapping composer.phar"
+              \$PHP -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+              ACTUAL_SIG="\$(\$PHP -r "echo hash_file('sha384', 'composer-setup.php');")"
+              EXPECTED_SIG="\$(\$PHP -r "echo file_get_contents('https://composer.github.io/installer.sig');")"
+              if [ "\$ACTUAL_SIG" != "\$EXPECTED_SIG" ]; then
+                echo "Composer installer signature mismatch, aborting" >&2
+                rm -f composer-setup.php
+                exit 1
+              fi
+              \$PHP composer-setup.php --quiet --install-dir="$DEPLOY_PATH" --filename=composer.phar
+              rm -f composer-setup.php
+              COMPOSER="$DEPLOY_PATH/composer.phar"
+            fi
             \$PHP \$COMPOSER install --no-dev --no-interaction --optimize-autoloader --prefer-dist
           EOF
 
