@@ -103,7 +103,12 @@ jobs:
             cd $DEPLOY_PATH
 
             echo "==> Pulling latest code"
-            git pull origin main
+            git fetch origin main
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "==> Stashing unexpected local changes on server before pulling"
+              git stash push -u -m "auto-stash before deploy \$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            fi
+            git merge --ff-only origin/main
 
             echo "==> Installing PHP dependencies"
             if command -v composer >/dev/null 2>&1; then
