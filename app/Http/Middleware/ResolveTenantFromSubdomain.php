@@ -51,6 +51,20 @@ final class ResolveTenantFromSubdomain
             return $tenant;
         }
 
+        // The staging environment shares the production database and mirrors
+        // production tenants under a "staging." prefix on the same custom
+        // domain (e.g. staging.store.example.com -> store.example.com), so
+        // it always reflects the same tenant data without a separate row.
+        if (str_starts_with($host, 'staging.')) {
+            $tenant = Tenant::query()
+                ->where('domain', mb_substr($host, mb_strlen('staging.')))
+                ->first();
+
+            if ($tenant !== null) {
+                return $tenant;
+            }
+        }
+
         // Then, try to resolve by subdomain
         $subdomain = $this->extractSubdomain($host, $baseDomain);
 

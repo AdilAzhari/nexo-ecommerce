@@ -1,0 +1,197 @@
+name: Deploy Staging
+
+# Deploys the `redesign` branch to a separate staging site that shares the
+# production database (same tenants, orders, users — see the warning in
+# "Finalize deploy" below). Intended for validating the redesign against
+# real data before merging to main.
+#
+# Triggers:
+#   - Automatically after CI completes successfully on the redesign branch
+#   - Manually via workflow_dispatch for hotfixes or re-deploys
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [redesign]
+  workflow_dispatch:
+    inputs:
+      run_migrations:
+        description: "Run database migrations (shared prod DB — confirm the migration is safe first)"
+        required: true
+        default: false
+        type: boolean
+      run_scout_import:
+        description: "Re-index Typesense (slow — only if schema changed)"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: false   # never cancel an in-flight deploy
+
+jobs:
+  deploy:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    # Only deploy if CI succeeded (or triggered manually), and only for the redesign branch
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'redesign') }}
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: redesign
+
+      # ── Build frontend assets on CI runner (npm not available on server) ──
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Install PHP dependencies
+        run: composer install --no-dev --no-interaction --no-scripts --prefer-dist
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      # ── SSH deploy ──────────────────────────────────────────
+      # Required GitHub secrets (in addition to the ones deploy.yml already uses —
+      # DEPLOY_HOST/PORT/USER/KEY/PHP are reused since it's the same server):
+      #   STAGING_DEPLOY_PATH     — absolute path to the staging app root on the server
+      #                             (e.g. /home/aljedkrq/nexo-ecommerce-staging)
+      #   STAGING_DEPLOY_WEBROOT  — absolute path to the staging subdomain's document root
+      #                             (e.g. /home/aljedkrq/staging.store.aljebal-albeedos.com)
+      #                             Required when the web root differs from STAGING_DEPLOY_PATH/public.
+      # ────────────────────────────────────────────────────────
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Add server to known hosts
+        run: ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Pull latest code & install PHP dependencies
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
+          DEPLOY_PHP:  ${{ secrets.DEPLOY_PHP }}
+        run: |
+          ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST << EOF
+            set -e
+            PHP="${DEPLOY_PHP:-php}"
+            cd $DEPLOY_PATH
+
+            echo "==> Pulling latest code"
+            git fetch origin redesign
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "==> Stashing unexpected local changes on server before pulling"
+              git stash push -u -m "auto-stash before deploy \$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            fi
+            git checkout redesign
+            git merge --ff-only origin/redesign
+
+            echo "==> Installing PHP dependencies"
+            if command -v composer >/dev/null 2>&1; then
+              COMPOSER="composer"
+            elif [ -f "\$HOME/bin/composer" ]; then
+              COMPOSER="\$HOME/bin/composer"
+            elif [ -f "$DEPLOY_PATH/composer.phar" ]; then
+              COMPOSER="$DEPLOY_PATH/composer.phar"
+            else
+              echo "==> composer not found on server, bootstrapping composer.phar"
+              \$PHP -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+              ACTUAL_SIG="\$(\$PHP -r "echo hash_file('sha384', 'composer-setup.php');")"
+              EXPECTED_SIG="\$(\$PHP -r "echo file_get_contents('https://composer.github.io/installer.sig');")"
+              if [ "\$ACTUAL_SIG" != "\$EXPECTED_SIG" ]; then
+                echo "Composer installer signature mismatch, aborting" >&2
+                rm -f composer-setup.php
+                exit 1
+              fi
+              \$PHP composer-setup.php --quiet --install-dir="$DEPLOY_PATH" --filename=composer.phar
+              rm -f composer-setup.php
+              COMPOSER="$DEPLOY_PATH/composer.phar"
+            fi
+            \$PHP \$COMPOSER install --no-dev --no-interaction --optimize-autoloader --prefer-dist
+          EOF
+
+      - name: Upload built assets
+        env:
+          DEPLOY_HOST:    ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT:    ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER:    ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH:    ${{ secrets.STAGING_DEPLOY_PATH }}
+        run: |
+          rsync -az --delete -e "ssh -p $DEPLOY_PORT" \
+            public/build/ \
+            $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/public/build/
+
+      - name: Finalize deploy
+        env:
+          DEPLOY_HOST:    ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT:    ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER:    ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH:    ${{ secrets.STAGING_DEPLOY_PATH }}
+          DEPLOY_PHP:     ${{ secrets.DEPLOY_PHP }}
+          DEPLOY_WEBROOT: ${{ secrets.STAGING_DEPLOY_WEBROOT }}
+          # Shared production DB: default migrations OFF on every automatic push so a
+          # half-finished redesign migration never silently lands on production data.
+          # Opt in explicitly via workflow_dispatch once a migration is verified safe.
+          RUN_MIGRATIONS: ${{ github.event.inputs.run_migrations || 'false' }}
+          RUN_SCOUT_IMPORT: ${{ github.event.inputs.run_scout_import || 'false' }}
+        run: |
+          ssh -p $DEPLOY_PORT $DEPLOY_USER@$DEPLOY_HOST << EOF
+            set -e
+            PHP="${DEPLOY_PHP:-php}"
+            cd $DEPLOY_PATH
+
+            # Ensure the web root's build/ points to the app's compiled assets.
+            if [ -n "$DEPLOY_WEBROOT" ]; then
+              ln -sfn $DEPLOY_PATH/public/build $DEPLOY_WEBROOT/build
+              echo "==> Symlinked $DEPLOY_WEBROOT/build -> $DEPLOY_PATH/public/build"
+            fi
+
+            echo "==> Caching configuration"
+            \$PHP artisan config:cache
+            \$PHP artisan route:cache
+            \$PHP artisan view:cache
+            \$PHP artisan event:cache
+
+            if [ "$RUN_MIGRATIONS" = "true" ]; then
+              echo "==> Running database migrations (shared production database)"
+              \$PHP artisan migrate --force
+            fi
+
+            if [ "$RUN_SCOUT_IMPORT" = "true" ]; then
+              echo "==> Re-indexing Typesense"
+              \$PHP artisan scout:flush  "App\Domain\Product\Models\Product"
+              \$PHP artisan scout:import "App\Domain\Product\Models\Product"
+              \$PHP artisan scout:flush  "App\Domain\Category\Models\Category"
+              \$PHP artisan scout:import "App\Domain\Category\Models\Category"
+              \$PHP artisan scout:flush  "App\Domain\Order\Models\Order"
+              \$PHP artisan scout:import "App\Domain\Order\Models\Order"
+            fi
+
+            echo "==> Done (\$(ls $DEPLOY_PATH/public/build/assets/ | wc -l) assets)"
+          EOF
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Staging deployment failed. Check the logs above."

@@ -55,6 +55,23 @@ describe('Tenant Resolution from Subdomain', function (): void {
         expect($response->getContent())->toBe('OK');
     });
 
+    it('resolves the same tenant on the staging alias of a custom domain', function (): void {
+        $tenant = Tenant::factory()
+            ->withDomain('store.example.com')
+            ->create(['slug' => 'store', 'is_active' => true]);
+
+        $middleware = new ResolveTenantFromSubdomain;
+        $request = Request::create('http://staging.store.example.com/dashboard');
+
+        $response = $middleware->handle($request, function ($req) use ($tenant): ResponseFactory|Response {
+            expect(Context::get('tenant_id'))->toBe($tenant->id);
+
+            return response('OK');
+        });
+
+        expect($response->getContent())->toBe('OK');
+    });
+
     it('throws not found for non-existent tenant', function (): void {
         $middleware = new ResolveTenantFromSubdomain;
         $request = Request::create('http://nonexistent.example.com/dashboard');
