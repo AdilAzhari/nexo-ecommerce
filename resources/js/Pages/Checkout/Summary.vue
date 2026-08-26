@@ -9,6 +9,7 @@ import { useCheckout } from '@/Composables/useCheckout';
 import { usePayments } from '@/Composables/usePayments';
 import { useLocale } from '@/Composables/useLocale';
 import { useCurrency } from '@/Composables/useCurrency';
+import { fetchWithCsrfRetry } from '@/Composables/useApi';
 import type { CartApiResource } from '@/types/api';
 
 function normalizeImages(images: string | string[] | null | undefined): string[] {
@@ -81,12 +82,11 @@ async function applyPromotion(): Promise<void> {
     couponLoading.value = true;
 
     try {
-        const res = await fetch('/api/v1/promotions/preview', {
+        const res = await fetchWithCsrfRetry('/api/v1/promotions/preview', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'X-XSRF-TOKEN': getXsrfToken(),
                 'X-Requested-With': 'XMLHttpRequest',
             },
             credentials: 'include',
@@ -125,12 +125,11 @@ async function applyGiftCard(): Promise<void> {
     giftCardLoading.value = true;
 
     try {
-        const res = await fetch('/api/v1/gift-cards/preview', {
+        const res = await fetchWithCsrfRetry('/api/v1/gift-cards/preview', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'X-XSRF-TOKEN': getXsrfToken(),
                 'X-Requested-With': 'XMLHttpRequest',
             },
             credentials: 'include',
@@ -165,12 +164,11 @@ async function handleInitiateCheckout() {
     isSubmitting.value = true;
 
     try {
-        const res = await fetch('/api/v1/checkout', {
+        const res = await fetchWithCsrfRetry('/api/v1/checkout', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'X-XSRF-TOKEN': getXsrfToken(),
                 'X-Requested-With': 'XMLHttpRequest',
                 'Idempotency-Key': getIdempotencyKey('checkout'),
             },
@@ -207,13 +205,6 @@ async function handleInitiateCheckout() {
         submitError.value = 'An unexpected error occurred. Please try again.';
         isSubmitting.value = false;
     }
-}
-
-function getXsrfToken(): string {
-    const match = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('XSRF-TOKEN='));
-    return match ? decodeURIComponent(match.split('=')[1]) : '';
 }
 
 function getIdempotencyKey(operation: string): string {

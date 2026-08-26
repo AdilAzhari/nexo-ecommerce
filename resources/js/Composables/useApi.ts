@@ -12,6 +12,10 @@ interface UseApiOptions {
      * Timeout in milliseconds
      */
     timeout?: number;
+    /**
+     * Internal: set when retrying after a CSRF token refresh, to avoid retry loops.
+     */
+    _retriedAfterCsrfRefresh?: boolean;
 }
 
 interface ApiError {
@@ -77,6 +81,26 @@ export function useApi() {
             loading.value = false;
             return response.data;
         } catch (err) {
+            // The session's CSRF token can fall out of sync with the XSRF-TOKEN cookie
+            // (session storage/rotation quirks). Refresh it once via Sanctum's
+            // csrf-cookie endpoint and retry before surfacing an error to the user.
+            if (
+                axios.isAxiosError(err) &&
+                err.response?.status === 419 &&
+                !options?._retriedAfterCsrfRefresh
+            ) {
+                try {
+                    await axios.get('/sanctum/csrf-cookie', { withCredentials: true });
+
+                    return await request<T>(method, url, data, {
+                        ...options,
+                        _retriedAfterCsrfRefresh: true,
+                    });
+                } catch {
+                    // Fall through to normal error handling below.
+                }
+            }
+
             loading.value = false;
             error.value = parseError(err);
             return null;
@@ -224,6 +248,37 @@ export function useApi() {
         destroy,
         clearError,
     };
+}
+
+function getXsrfTokenFromCookie(): string {
+    const match = document.cookie.split('; ').find(row => row.startsWith('XSRF-TOKEN='));
+    return match ? decodeURIComponent(match.split('=')[1]) : '';
+}
+
+/**
+ * Wraps `fetch()` for callers that can't use the `useApi` composable (e.g. one-off
+ * calls outside a component's setup). Injects a fresh X-XSRF-TOKEN header on every
+ * attempt, and if the session's CSRF token has fallen out of sync with the cookie,
+ * refreshes it via Sanctum's csrf-cookie endpoint and retries once before giving up.
+ */
+export async function fetchWithCsrfRetry(input: string, init: RequestInit = {}): Promise<Response> {
+    const withFreshToken = (): RequestInit => ({
+        ...init,
+        headers: {
+            ...init.headers,
+            'X-XSRF-TOKEN': getXsrfTokenFromCookie(),
+        },
+    });
+
+    const response = await fetch(input, withFreshToken());
+
+    if (response.status !== 419) {
+        return response;
+    }
+
+    await fetch('/sanctum/csrf-cookie', { credentials: 'include' });
+
+    return fetch(input, withFreshToken());
 }
 
 /**
