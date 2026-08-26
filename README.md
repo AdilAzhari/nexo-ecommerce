@@ -1,6 +1,6 @@
 # Nexo — Modular E-Commerce System
 
-**Live:** https://store.aljebal-albeedos.com
+**Live:** store.aljebal-albeedos.com
 
 A Domain-Driven Design (DDD) **multi-tenant** e-commerce platform built with Laravel 12, featuring strict invariant enforcement, event-driven architecture, real-time chat, product reviews, internationalization, and comprehensive business rule validation.
 
