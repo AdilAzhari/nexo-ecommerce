@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Category\Models\Category;
+use App\Domain\Product\Models\Product;
 use App\Domain\Promotion\Models\Promotion;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Context;
@@ -15,6 +17,22 @@ final class HomeController extends Controller
     public function __invoke(): Response
     {
         $now = now();
+
+        $featuredProducts = Product::query()
+            ->where('is_active', true)
+            ->with(['category', 'stock'])
+            ->withCount(['reviews' => fn ($q) => $q->where('is_approved', true)])
+            ->withAvg(['reviews' => fn ($q) => $q->where('is_approved', true)], 'rating')
+            ->orderByDesc('is_featured')
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get();
+
+        $categories = Category::query()
+            ->whereHas('products', fn ($q) => $q->where('is_active', true))
+            ->orderBy('name')
+            ->limit(8)
+            ->get(['id', 'name', 'slug']);
 
         $flashSales = Promotion::query()
             ->where('is_flash_sale', true)
@@ -58,6 +76,8 @@ final class HomeController extends Controller
         return Inertia::render('Home', [
             'flashSales' => $flashSales,
             'storefront' => $storefront,
+            'featuredProducts' => $featuredProducts,
+            'categories' => $categories,
         ]);
     }
 }
