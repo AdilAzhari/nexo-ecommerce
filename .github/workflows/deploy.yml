@@ -150,7 +150,7 @@ jobs:
             \$PHP artisan view:cache
             \$PHP artisan event:cache
 
-            if [ "\$RUN_MIGRATIONS" = "true" ]; then
+            if [ "$RUN_MIGRATIONS" = "true" ]; then
               echo "==> Running database migrations"
               \$PHP artisan migrate --force
             fi
@@ -158,7 +158,7 @@ jobs:
             echo "==> Restarting queue workers"
             \$PHP artisan queue:restart
 
-            if [ "\$RUN_SCOUT_IMPORT" = "true" ]; then
+            if [ "$RUN_SCOUT_IMPORT" = "true" ]; then
               echo "==> Re-indexing Typesense"
               \$PHP artisan scout:flush  "App\Domain\Product\Models\Product"
               \$PHP artisan scout:import "App\Domain\Product\Models\Product"
