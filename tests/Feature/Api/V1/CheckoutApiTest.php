@@ -135,6 +135,39 @@ describe('Checkout API', function () {
         ]);
     });
 
+    it('returns the payment intent client_secret, not the provider reference', function () {
+        $user = User::factory()->create();
+        $product = Product::factory()->create();
+        $cart = Cart::factory()->create(['user_id' => $user->id]);
+        $cart->items()->create([
+            'product_id' => $product->id,
+            'price_cents_snapshot' => 5000,
+            'tax_cents_snapshot' => 500,
+            'quantity' => 1,
+        ]);
+
+        Stock::factory()->create([
+            'product_id' => $product->id,
+            'quantity_available' => 10,
+            'quantity_reserved' => 0,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/v1/checkout', [
+            'cart_id' => $cart->id,
+            'currency' => 'USD',
+        ]);
+
+        $response->assertSuccessful();
+
+        $paymentIntent = PaymentIntent::query()->find($response->json('payment_intent.id'));
+
+        expect($response->json('payment_intent.client_secret'))
+            ->toBe($paymentIntent->client_secret)
+            ->not->toBe($paymentIntent->provider_reference);
+    });
+
     it('returns cached response for duplicate idempotency key', function () {
         $user = User::factory()->create();
         $product = Product::factory()->create();

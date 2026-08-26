@@ -21,7 +21,7 @@ final class PaymentIntentResource extends JsonResource
             'currency' => $this->currency,
             'client_secret' => $this->when(
                 $this->status->canBeConfirmed(),
-                $this->provider_reference
+                $this->client_secret
             ),
             'created_at' => $this->created_at->toISOString(),
         ];

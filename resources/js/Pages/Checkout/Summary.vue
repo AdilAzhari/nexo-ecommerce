@@ -39,7 +39,7 @@ const props = defineProps<Props>();
 const { localePath } = useLocale();
 const { currency, formatPrice } = useCurrency();
 
-const { initiateCheckout, loading: checkoutLoading, error: checkoutError, clearError } = useCheckout();
+const { loading: checkoutLoading, error: checkoutError, clearError } = useCheckout();
 const { stripe, elements, loading: stripeLoading, error: stripeError, createElements, confirmPayment, paymentProcessing } = usePayments(props.stripePublicKey);
 
 const clientSecret = ref<string | null>(null);
@@ -86,7 +86,8 @@ async function applyPromotion(): Promise<void> {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'X-XSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getXsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
             },
             credentials: 'include',
             body: JSON.stringify({ cart_id: props.cart.id, code }),
@@ -129,7 +130,8 @@ async function applyGiftCard(): Promise<void> {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'X-XSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getXsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
             },
             credentials: 'include',
             body: JSON.stringify({ code }),
@@ -162,54 +164,56 @@ async function handleInitiateCheckout() {
     submitError.value = null;
     isSubmitting.value = true;
 
-    const success = await initiateCheckout(props.cart.id, currency.value);
+    try {
+        const res = await fetch('/api/v1/checkout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-XSRF-TOKEN': getXsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Idempotency-Key': getIdempotencyKey('checkout'),
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                cart_id: props.cart.id,
+                currency: currency.value,
+                shipping_method_id: selectedShippingMethodId.value,
+                ...(appliedCouponCode.value ? { promotion_code: appliedCouponCode.value } : {}),
+                ...(appliedGiftCardCode.value ? { gift_card_code: appliedGiftCardCode.value } : {}),
+                ...(!props.isAuthenticated ? { guest_email: guestEmail.value, guest_name: guestName.value } : {}),
+            }),
+        });
 
-    if (!success) {
-        submitError.value = checkoutError.value?.message ?? 'Failed to initiate checkout';
-        isSubmitting.value = false;
-        return;
-    }
+        if (!res.ok) {
+            const errorData = await res.json();
+            submitError.value = errorData.errors
+                ? Object.values(errorData.errors as Record<string, string[]>).flat()[0]
+                : (errorData.error?.message ?? errorData.message ?? 'Checkout failed. Please try again.');
+            isSubmitting.value = false;
+            return;
+        }
 
-    const orderData = await fetch('/api/v1/checkout', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-XSRF-TOKEN': getCsrfToken(),
-            'Idempotency-Key': getIdempotencyKey('checkout'),
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-            cart_id: props.cart.id,
-            currency: currency.value,
-            shipping_method_id: selectedShippingMethodId.value,
-            ...(appliedCouponCode.value ? { promotion_code: appliedCouponCode.value } : {}),
-            ...(appliedGiftCardCode.value ? { gift_card_code: appliedGiftCardCode.value } : {}),
-            ...(!props.isAuthenticated ? { guest_email: guestEmail.value, guest_name: guestName.value } : {}),
-        }),
-    });
+        const result = await res.json();
 
-    if (!orderData.ok) {
-        const errorData = await orderData.json();
-        submitError.value = errorData.error?.message ?? 'Checkout failed';
-        isSubmitting.value = false;
-        return;
-    }
-
-    const result = await orderData.json();
-
-    if (result.order && result.payment_intent) {
-        sessionStorage.setItem('checkout_client_secret', result.payment_intent.client_secret);
-        router.visit(`/checkout/pending?order_id=${result.order.id}`);
-    } else {
-        submitError.value = 'Invalid checkout response';
+        if (result.order && result.payment_intent) {
+            sessionStorage.setItem('checkout_client_secret', result.payment_intent.client_secret);
+            router.visit(`/checkout/pending?order_id=${result.order.id}`);
+        } else {
+            submitError.value = 'Invalid checkout response';
+            isSubmitting.value = false;
+        }
+    } catch {
+        submitError.value = 'An unexpected error occurred. Please try again.';
         isSubmitting.value = false;
     }
 }
 
-function getCsrfToken(): string {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta?.getAttribute('content') ?? '';
+function getXsrfToken(): string {
+    const match = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('XSRF-TOKEN='));
+    return match ? decodeURIComponent(match.split('=')[1]) : '';
 }
 
 function getIdempotencyKey(operation: string): string {
