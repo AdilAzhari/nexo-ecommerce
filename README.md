@@ -299,6 +299,30 @@ CURRENCY_CACHE_TTL=3600
 | `fashion-hub` | Active |
 | `old-shop` | Inactive |
 
+### Demo Login Credentials (after seeding)
+
+All seeded demo accounts share the password **`password`**.
+
+| Email | Role | Tenant |
+|-------|------|--------|
+| `superadmin@platform.com` | Super Admin | — (platform-level) |
+| `admin@acme-store.com` | Admin | acme-store |
+| `manager@acme-store.com` | Manager | acme-store |
+| `support@acme-store.com` | Support | acme-store |
+| `finance@acme-store.com` | Finance | acme-store |
+| `warehouse@acme-store.com` | Warehouse | acme-store |
+| `customer1@acme-store.com` | Customer | acme-store |
+| `customer2@acme-store.com` | Customer | acme-store |
+| `admin@gadget-world.com` | Admin | gadget-world |
+| `manager@gadget-world.com` | Manager | gadget-world |
+| `customer@gadget-world.com` | Customer | gadget-world |
+| `admin@fashionhub.com` | Admin | fashion-hub |
+| `support@fashionhub.com` | Support | fashion-hub |
+| `customer@fashionhub.com` | Customer | fashion-hub |
+
+> Admin/Control Plane login is at `/control-plane/login`. Storefront login is at `/en/login` (or `/ar`, `/ms`).
+> These credentials only exist after running `php artisan db:seed` — never reuse the `password` default outside local/demo environments.
+
 ## Internationalization
 
 The frontend supports three locales accessed via URL prefix:

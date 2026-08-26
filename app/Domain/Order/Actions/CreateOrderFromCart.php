@@ -211,7 +211,15 @@ final readonly class CreateOrderFromCart
                 ->where('product_id', $cartItem->product_id)
                 ->when($cartItem->variant_id !== null, fn ($q) => $q->where('variant_id', $cartItem->variant_id))
                 ->lockForUpdate()
-                ->firstOrFail();
+                ->first();
+
+            if (! $stock instanceof Stock) {
+                throw new InsufficientStockException(
+                    productId: $cartItem->product_id,
+                    requested: $cartItem->quantity,
+                    available: 0
+                );
+            }
 
             if (! $stock->isAvailable($cartItem->quantity)) {
                 throw new InsufficientStockException(
