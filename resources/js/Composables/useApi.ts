@@ -84,20 +84,25 @@ export function useApi() {
             // The session's CSRF token can fall out of sync with the XSRF-TOKEN cookie
             // (session storage/rotation quirks). Refresh it once via Sanctum's
             // csrf-cookie endpoint and retry before surfacing an error to the user.
-            if (
-                axios.isAxiosError(err) &&
-                err.response?.status === 419 &&
-                !options?._retriedAfterCsrfRefresh
-            ) {
-                try {
-                    await axios.get('/sanctum/csrf-cookie', { withCredentials: true });
+            if (axios.isAxiosError(err) && err.response?.status === 419) {
+                if (!options?._retriedAfterCsrfRefresh) {
+                    try {
+                        await axios.get('/sanctum/csrf-cookie', { withCredentials: true });
 
-                    return await request<T>(method, url, data, {
-                        ...options,
-                        _retriedAfterCsrfRefresh: true,
-                    });
-                } catch {
-                    // Fall through to normal error handling below.
+                        return await request<T>(method, url, data, {
+                            ...options,
+                            _retriedAfterCsrfRefresh: true,
+                        });
+                    } catch {
+                        // Fall through to normal error handling below.
+                    }
+                } else {
+                    // A CSRF cookie refresh didn't resolve it either — the session itself
+                    // is desynced, not just the token. A full reload reliably re-establishes
+                    // a clean session, so use it as the last resort instead of leaving the
+                    // user stuck on a page that will keep failing every request.
+                    window.location.reload();
+                    return null;
                 }
             }
 
@@ -260,6 +265,8 @@ function getXsrfTokenFromCookie(): string {
  * calls outside a component's setup). Injects a fresh X-XSRF-TOKEN header on every
  * attempt, and if the session's CSRF token has fallen out of sync with the cookie,
  * refreshes it via Sanctum's csrf-cookie endpoint and retries once before giving up.
+ * If the session itself is desynced (a cookie refresh doesn't resolve it either),
+ * falls back to a full reload, which reliably re-establishes a clean session.
  */
 export async function fetchWithCsrfRetry(input: string, init: RequestInit = {}): Promise<Response> {
     const withFreshToken = (): RequestInit => ({
@@ -278,7 +285,13 @@ export async function fetchWithCsrfRetry(input: string, init: RequestInit = {}):
 
     await fetch('/sanctum/csrf-cookie', { credentials: 'include' });
 
-    return fetch(input, withFreshToken());
+    const retried = await fetch(input, withFreshToken());
+
+    if (retried.status === 419) {
+        window.location.reload();
+    }
+
+    return retried;
 }
 
 /**
